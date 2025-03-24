@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Energy-Efficient CPU Scheduler</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            gap: 10px;
+        }
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .stat-card {
+            background: #f1f8ff;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .stat-value {
+            font-weight: bold;
+            font-size: 1.2em;
+            color: #2c3e50;
+            margin-top: 5px;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        select, input[type="range"] {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            width: 100%;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #3498db;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .chart-container {
+            height: 250px;
+            margin-top: 20px;
+        }
+        .task {
+            background: white;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .task-priority {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .high { background: #ffdddd; color: #d63031; }
+        .medium { background: #fff4dd; color: #f39c12; }
+        .low { background: #ddffdd; color: #27ae60; }
+        .task-status {
+            font-size: 0.9em;
+            color: #7f8c8d;
+        }
+        .completed { color: #27ae60; }
+    </style>
+</head>
+<body>
+    <h1 style="color: #2c3e50; margin-bottom: 5px;">Energy-Efficient CPU Scheduler</h1>
+    <p style="color: #7f8c8d; margin-top: 0;">Optimizing power consumption for mobile and embedded systems</p>
+    
+    <div class="card">
+        <h2 style="margin-top: 0; color: #3498db;">Controls</h2>
+        <div class="slider-container">
+            <label style="min-width: 120px;">Power Mode:</label>
+            <select id="powerMode">
+                <option value="efficiency">Maximum Efficiency</option>
+                <option value="balanced" selected>Balanced</option>
+                <option value="performance">Performance</option>
+            </select>
+        </div>
+
+        <div class="slider-container">
+            <label style="min-width: 120px;">Idle Threshold:</label>
+            <input type="range" id="threshold" min="0" max="100" value="30">
+            <span id="thresholdValue" style="min-width: 40px;">30%</span>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button id="applyBtn">Apply Settings</button>
+            <button id="addTaskBtn">Add Test Task</button>
+            <button id="startStopBtn">Start Scheduler</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-top: 0; color: #3498db;">System Metrics</h2>
+        <div class="stat-grid">
+            <div class="stat-card">
+                <div>Power Usage</div>
+                <div id="powerUsage" class="stat-value">2.1W</div>
+            </div>
+            <div class="stat-card">
+                <div>CPU Usage</div>
+                <div id="cpuUsage" class="stat-value">68%</div>
+            </div>
+            <div class="stat-card">
+                <div>Energy Saved</div>
+                <div id="energySaved" class="stat-value">37%</div>
+            </div>
+            <div class="stat-card">
+                <div>Tasks Completed</div>
+                <div id="tasksCompleted" class="stat-value">24</div>
+            </div>
+            <div class="stat-card">
+                <div>Avg. Response</div>
+                <div id="avgResponse" class="stat-value">18ms</div>
+            </div>
+            <div class="stat-card">
+                <div>Battery Gain</div>
+                <div id="batteryGain" class="stat-value">2.1h</div>
+            </div>
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="powerChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin-top: 0; color: #3498db;">Task Queue</h2>
+            <div id="schedulerStatus" style="color: #e74c3c; font-weight: bold;">(Stopped)</div>
+        </div>
+        <div id="taskQueue">
+            <!-- Tasks will be added here dynamically -->
+        </div>
+    </div>
+
+    <script>
+        // Initialize charts
+        const powerCtx = document.getElementById('powerChart').getContext('2d');
+        const powerChart = new Chart(powerCtx, {
+            type: 'line',
+            data: {
+                labels: Array(30).fill(''),
+                datasets: [
+                    {
+                        label: 'CPU Usage (%)',
+                        data: Array(30).fill(0),
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Power (W)',
+                        data: Array(30).fill(0),
+                        borderColor: '#e74c3c',
+                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: 'CPU Usage (%)' },
+                        min: 0,
+                        max: 100
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: 'Power (W)' },
+                        min: 0,
+                        max: 5,
+                        grid: { drawOnChartArea: false }
+                    }
+                }
+            }
+        });
+
+        // System state
+        let schedulerRunning = false;
+        let tasks = [];
+        let completedTasks = 24;
+        let metricsHistory = {
+            cpu: Array(30).fill(50),
+            power: Array(30).fill(2.5)
+        };
+
+        // DOM elements
+        const taskQueueEl = document.getElementById('taskQueue');
+        const schedulerStatusEl = document.getElementById('schedulerStatus');
+
+        // Initialize with some tasks
+        addTask('System Monitor', 'high');
+        addTask('Background Sync', 'medium');
+        addTask('Data Logging', 'low');
+
+        // Event listeners
+        document.getElementById('threshold').addEventListener('input', function() {
+            document.getElementById('thresholdValue').textContent = this.value + '%';
+        });
+
+        document.getElementById('applyBtn').addEventListener('click', function() {
+            const mode = document.getElementById('powerMode').value;
+            const threshold = document.getElementById('threshold').value;
+            
+            // In a real app, this would send to backend
+            updateEnergySavings(mode);
+            
+            alert(`Settings updated:\nPower Mode: ${mode}\nIdle Threshold: ${threshold}%`);
+        });
+
+        document.getElementById('addTaskBtn').addEventListener('click', function() {
+            const taskTypes = ['System Update', 'Data Processing', 'Network Request', 'Sensor Reading'];
+            const priorities = ['high', 'medium', 'low'];
+            const randomType = taskTypes[Math.floor(Math.random() * taskTypes.length)];
+            const randomPriority = priorities[Math.floor(Math.random() * priorities.length)];
+            
+            addTask(randomType, randomPriority);
+        });
+
+        document.getElementById('startStopBtn').addEventListener('click', function() {
+            schedulerRunning = !schedulerRunning;
+            if (schedulerRunning) {
+                this.textContent = 'Stop Scheduler';
+                schedulerStatusEl.textContent = '(Running)';
+                schedulerStatusEl.style.color = '#27ae60';
+                startScheduler();
+            } else {
+                this.textContent = 'Start Scheduler';
+                schedulerStatusEl.textContent = '(Stopped)';
+                schedulerStatusEl.style.color = '#e74c3c';
+            }
+        });
+
+        // Functions
+        function addTask(name, priority) {
+            const taskId = Date.now();
+            tasks.push({ id: taskId, name, priority, status: 'pending' });
+            
+            const taskEl = document.createElement('div');
+            taskEl.className = 'task';
+            taskEl.id = `task-${taskId}`;
+            taskEl.innerHTML = `
+                <div>
+                    <span class="task-priority ${priority}">${priority.toUpperCase()}</span>
+                    <span style="margin-left: 10px;">${name}</span>
+                </div>
+                <span class="task-status">Pending</span>
+            `;
+            
+            taskQueueEl.prepend(taskEl);
+        }
+
+        function processTask() {
+            if (!schedulerRunning || tasks.length === 0) return;
+            
+            // Find highest priority task
+            const priorityOrder = { high: 3, medium: 2, low: 1 };
+            tasks.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
+            
+            const task = tasks.pop();
+            const taskEl = document.getElementById(`task-${task.id}`);
+            
+            if (taskEl) {
+                taskEl.querySelector('.task-status').textContent = 'Completed';
+                taskEl.querySelector('.task-status').classList.add('completed');
+                
+                // Update metrics
+                completedTasks++;
+                document.getElementById('tasksCompleted').textContent = completedTasks;
+                
+                // Remove task after animation
+                setTimeout(() => {
+                    taskEl.style.opacity = '0';
+                    setTimeout(() => taskEl.remove(), 300);
+                }, 1000);
+            }
+        }
+
+        function updateEnergySavings(mode) {
+            let savings, batteryGain;
+            
+            switch(mode) {
+                case 'efficiency':
+                    savings = '42%';
+                    batteryGain = '2.8h';
+                    break;
+                case 'performance':
+                    savings = '12%';
+                    batteryGain = '0.7h';
+                    break;
+                default: // balanced
+                    savings = '37%';
+                    batteryGain = '2.1h';
+            }
+            
+            document.getElementById('energySaved').textContent = savings;
+            document.getElementById('batteryGain').textContent = batteryGain;
+        }
+
+        function startScheduler() {
+            // Simulate task processing
+            const schedulerInterval = setInterval(() => {
+                if (!schedulerRunning) {
+                    clearInterval(schedulerInterval);
+                    return;
+                }
+                
+                processTask();
+            }, 2000);
+            
+            // Simulate metrics updates
+            const metricsInterval = setInterval(() => {
+                if (!schedulerRunning) {
+                    clearInterval(metricsInterval);
+                    return;
+                }
+                
+                // Generate random metrics based on mode
+                const mode = document.getElementById('powerMode').value;
+                let baseCpu, basePower;
+                
+                switch(mode) {
+                    case 'efficiency':
+                        baseCpu = 40 + Math.random() * 30;
+                        basePower = 1.5 + Math.random() * 1.0;
+                        break;
+                    case 'performance':
+                        baseCpu = 60 + Math.random() * 30;
+                        basePower = 3.0 + Math.random() * 1.0;
+                        break;
+                    default: // balanced
+                        baseCpu = 50 + Math.random() * 30;
+                        basePower = 2.0 + Math.random() * 1.0;
+                }
+                
+                // Add some spikes
+                if (Math.random() > 0.9) {
+                    baseCpu += 20;
+                    basePower += 0.8;
+                }
+                
+                // Update metrics
+                const cpu = Math.min(100, Math.round(baseCpu));
+                const power = Math.min(4.5, basePower.toFixed(1));
+                
+                document.getElementById('cpuUsage').textContent = cpu + '%';
+                document.getElementById('powerUsage').textContent = power + 'W';
+                document.getElementById('avgResponse').textContent = 
+                    Math.max(5, Math.round(30 - (cpu / 4))) + 'ms';
+                
+                // Update chart
+                metricsHistory.cpu.push(cpu);
+                metricsHistory.power.push(power);
+                metricsHistory.cpu.shift();
+                metricsHistory.power.shift();
+                
+                powerChart.data.datasets[0].data = metricsHistory.cpu;
+                powerChart.data.datasets[1].data = metricsHistory.power;
+                powerChart.update();
+                
+            }, 1000);
+        }
+
+        // Initial update
+        updateEnergySavings('balanced');
+    </script>
+</body>
+</html>
